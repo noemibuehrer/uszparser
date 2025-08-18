@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 
 import re
+import warnings
 from datetime import timedelta
 from typing import Any, Literal
-import warnings
 
 import pandas as pd
 from dateutil import parser as dtprs
@@ -26,6 +26,7 @@ def func_from(choices):
     """Return a function that maps a given input according to the given
     dictionary to the respective outputs.
     """
+
     def func(raw, *_a, **_kw):
         try:
             return choices[raw]
@@ -47,7 +48,7 @@ def discard_char(value, *_args, **_kwargs):
         )
 
     res = findings[0]
-    if res == 'x':
+    if res == "x":
         res = 2
 
     return int(res)
@@ -55,14 +56,16 @@ def discard_char(value, *_args, **_kwargs):
 
 def age(diagnose_n_birth, *_args, **_kwargs):
     """Compute age from array with two entries: Date of birth & date of
-    diagnosis."""
+    diagnosis.
+    """
     birth = dtprs.parse(diagnose_n_birth[0], dayfirst=True)
     diag = dtprs.parse(diagnose_n_birth[1], dayfirst=True)
 
     age = diag.year - birth.year
 
-    if ((diag.month < birth.month)
-            or (diag.month == birth.month and diag.day < birth.day)):
+    if (diag.month < birth.month) or (
+        diag.month == birth.month and diag.day < birth.day
+    ):
         age -= 1
 
     return age
@@ -70,12 +73,13 @@ def age(diagnose_n_birth, *_args, **_kwargs):
 
 def find(arr, *_args, icd_code=False, **_kwargs):
     """Search in the first column of `arr` for a 'Yes' and return the respective
-    entry in the second column."""
-    search = [str(item) for item in arr[:,0]]
-    find = [str(item) for item in arr[:,1]]
+    entry in the second column.
+    """
+    search = [str(item) for item in arr[:, 0]]
+    find = [str(item) for item in arr[:, 1]]
 
     try:
-        idx = [i for i,item in enumerate(search) if "Yes" in item]
+        idx = [i for i, item in enumerate(search) if "Yes" in item]
         found = find[idx[0]]
     except:
         found = "unknown"
@@ -109,6 +113,7 @@ def compute_hash(*args, **_kwargs):
 
 FUNC_DICT = {
     "discard_char": discard_char,
+    "keep_suffix": lambda x, *_a, **_kw: re.sub(r"[0123]", "", str(x)),
     "find_subsite": find,
     "find_icd": lambda x, *_a, **_kw: find(x, icd_code=True),
     "date": reformat_date,
@@ -119,20 +124,18 @@ FUNC_DICT = {
     "bool": lambda x, *_a, **_kw: bool(x),
     "hash": compute_hash,
     "keep": lambda *args, **_kw: args[0],
-    "nothing": lambda *_a, **_kw: None
+    "nothing": lambda *_a, **_kw: None,
 }
 
 
-def lr2ic(
-    data_frame: pd.DataFrame
-):
+def lr2ic(data_frame: pd.DataFrame):
     """Transform entries on a left-right basis to a ipsi-contra basis."""
     modalities = list(set(data_frame.columns.get_level_values(level=0)))
     modalities.remove("patient")
     modalities.remove("tumor")
 
-    swap = data_frame[("tumor", "1", "side")] == "right"
-    no_swap = data_frame[("tumor", "1", "side")] != "right"
+    swap = data_frame[("tumor", "core", "side")] == "right"
+    no_swap = data_frame[("tumor", "core", "side")] != "right"
     lnls = list(data_frame[(modalities[0], "left")].columns)
 
     for mod in modalities:
@@ -144,16 +147,15 @@ def lr2ic(
                 swap, [(mod, "right", lnl), (mod, "left", lnl)]
             ].values
 
-            data_frame.loc[
-                no_swap, [(mod, "left", lnl), (mod, "right", lnl)]
-            ] = normal_values
-            data_frame.loc[
-                swap, [(mod, "left", lnl), (mod, "right", lnl)]
-            ] = swapped_values
+            data_frame.loc[no_swap, [(mod, "left", lnl), (mod, "right", lnl)]] = (
+                normal_values
+            )
+            data_frame.loc[swap, [(mod, "left", lnl), (mod, "right", lnl)]] = (
+                swapped_values
+            )
 
     data_frame = data_frame.rename(
-        {"left": "ipsi", "right": "contra"},
-        axis="columns", level=1
+        {"left": "ipsi", "right": "contra"}, axis="columns", level=1
     )
 
     return data_frame
@@ -170,12 +172,11 @@ def flatten_recursively(
     if "row" in nested:
         redux_dict[current_branch] = nested
         return redux_dict
-    else:
-        for key, item in nested.items():
-            new_branch = (*current_branch, key)
-            redux_dict = flatten_recursively(item, redux_dict, new_branch)
+    for key, item in nested.items():
+        new_branch = (*current_branch, key)
+        redux_dict = flatten_recursively(item, redux_dict, new_branch)
 
-        return redux_dict
+    return redux_dict
 
 
 def warning_from_execption(exc):
@@ -214,7 +215,7 @@ def parse_sheet(
         try:
             new_row[column] = func(raw, rand_days_offset=offset)
         except Exception as exc:
-            id = sheet.iloc[1,1]
+            id = sheet.iloc[1, 1]
             msg = f"error in cell(s) [{col},{row}] (should be mapped to {column}) of patient {id}:"
             if handling == "raise":
                 raise Exception(msg) from exc
@@ -250,11 +251,7 @@ def parse_file(
 
     handling = "raise" if fail_quickly else "ignore"
     if verbose:
-        sheets = tqdm(
-            excel_sheets.items(),
-            desc="Looping through sheets",
-            ncols=100
-        )
+        sheets = tqdm(excel_sheets.items(), desc="Looping through sheets", ncols=100)
         handling = "warn"
     else:
         sheets = excel_sheets.items()

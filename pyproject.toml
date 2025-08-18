@@ -32,9 +32,6 @@ source = "https://github.com/rmnldwg/uszparser"
 [project.optional-dependencies]
 dev = [
     "pre-commit",
-    "isort",
-    "pycln",
-    "pylint",
 ]
 
 [project.scripts]
@@ -60,3 +57,6 @@ ensure_newline_before_comments = true
 
 [tool.pycln]
 all = true
+
+[tool.ruff.lint]
+ignore = ["D", "E722"]  # TODO: Should not be ignored, but rather fixed.
