@@ -2,7 +2,7 @@
 
 import re
 import warnings
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any, Literal
 
 import pandas as pd
@@ -26,12 +26,10 @@ def func_from(choices):
     """Return a function that maps a given input according to the given
     dictionary to the respective outputs.
     """
+    normalised = {str(k).strip().lower(): v for k, v in choices.items()}
 
     def func(raw, *_a, **_kw):
-        try:
-            return choices[raw]
-        except KeyError:
-            return None
+        return normalised.get(str(raw).strip().lower())
 
     return func
 
@@ -53,13 +51,17 @@ def discard_char(value, *_args, **_kwargs):
 
     return int(res)
 
+def _to_datetime(value, dayfirst=False):
+    if isinstance(value, datetime):   # pd.Timestamp is a subclass of datetime
+        return value
+    return dtprs.parse(str(value), dayfirst=dayfirst)
 
 def age(diagnose_n_birth, *_args, **_kwargs):
     """Compute age from array with two entries: Date of birth & date of
     diagnosis.
     """
-    birth = dtprs.parse(diagnose_n_birth[0], dayfirst=True)
-    diag = dtprs.parse(diagnose_n_birth[1], dayfirst=True)
+    birth = _to_datetime(diagnose_n_birth[0])
+    diag = _to_datetime(diagnose_n_birth[1])
 
     age = diag.year - birth.year
 
@@ -95,15 +97,21 @@ def find(arr, *_args, icd_code=False, **_kwargs):
 
 def reformat_date(value, *_args, rand_days_offset: int = 0, **_kwargs):
     """Bring dates into uniform format."""
-    value = str(value)
     try:
-        diagnose_date = dtprs.parse(value, dayfirst=True)
-    except dtprs.ParserError:
+        diagnose_date = _to_datetime(value, dayfirst=False)
+    except (dtprs.ParserError, TypeError):
         return None
 
     rand_offset = timedelta(days=rand_days_offset)
     offset_diagnose_date = diagnose_date + rand_offset
     return offset_diagnose_date.strftime("%Y-%m-%d")
+
+def safe_int(value, *_args, **_kwargs):
+    """Convert to int, returning None for empty (NaN) cells."""
+    if pd.isna(value):
+        return None
+    else:
+        return int(value)
 
 
 def compute_hash(*args, **_kwargs):
@@ -119,7 +127,7 @@ FUNC_DICT = {
     "date": reformat_date,
     "age": age,
     "str": lambda x, *_a, **_kw: str(x).lower(),
-    "int": lambda x, *_a, **_kw: int(x),
+    "int": safe_int,
     "float": lambda x, *_a, **_kw: float(x),
     "bool": lambda x, *_a, **_kw: bool(x),
     "hash": compute_hash,
